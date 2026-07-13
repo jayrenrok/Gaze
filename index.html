@@ -266,6 +266,7 @@ let currentTarget = null;
 let dwellStart = 0;
 let cooldownUntil = 0;
 let readyEl = null;
+let blockedEl = null; // the just-confirmed key; must be looked away from before it can fire again
 
 function setTarget(el){
   if(el !== currentTarget){
@@ -273,12 +274,14 @@ function setTarget(el){
     dwellStart = performance.now();
     keyEls.forEach(k=>{ k.classList.remove('gazed','ready'); const p=k.querySelector('.progress'); p.style.strokeDashoffset = CIRC; });
     if(el) el.classList.add('gazed');
+    // once the user looks away from the just-confirmed key, it's re-armed
+    if(blockedEl && el !== blockedEl){ blockedEl = null; }
   }
 }
 
 function tickDwell(){
   const now = performance.now();
-  if(!currentTarget || now < cooldownUntil){
+  if(!currentTarget || now < cooldownUntil || currentTarget === blockedEl){
     return;
   }
   const elapsed = now - dwellStart;
@@ -295,10 +298,10 @@ function tryConfirmOnBlink(){
   const now = performance.now();
   if(readyEl && now >= cooldownUntil){
     confirmKey(readyEl);
+    blockedEl = readyEl;
     cooldownUntil = now + CONFIRM_COOLDOWN_MS;
     readyEl.classList.remove('ready','gazed');
     readyEl.querySelector('.progress').style.strokeDashoffset = CIRC;
-    dwellStart = now; // require fresh dwell to re-select same key
     readyEl = null;
   }
 }
@@ -446,7 +449,10 @@ function detectLoop(){
 async function startCamera(){
   setStatus('Requesting camera…', 'warn');
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width:480, height:360 }, audio:false });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width:480, height:360, facingMode: { ideal: "user" } },
+      audio:false
+    });
     video.srcObject = stream;
     await video.play();
 
