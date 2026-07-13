@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KYC Aura — Gaze Keypad</title>
+<style>
+  :root{
+    --bg: #05070c;
+    --panel: #0b111f;
+    --panel-2: #101a2e;
+    --line: #1c2740;
+    --teal: #35e8cf;
+    --teal-dim: #1a5c53;
+    --text: #eaf1f7;
+    --text-dim: #7d8cab;
+    --danger: #ff6b6b;
+    --ring-track: #1a2338;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; height:100%;
+    background: radial-gradient(circle at 50% -10%, #0d1526 0%, #05070c 55%), var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', ui-monospace, SFMono-Regular, Menlo, monospace;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app{
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 20px 18px 34px;
+    display:flex; flex-direction:column; gap:16px;
+  }
+  /* header */
+  .brandrow{ display:flex; align-items:center; gap:12px; }
+  .orb{
+    width:44px; height:44px; border-radius:50%;
+    background: conic-gradient(from 90deg, #35e8cf, #6ea8ff, #c78bff, #ff8bb0, #ffd27a, #35e8cf);
+    box-shadow: 0 0 18px rgba(53,232,207,.35);
+  }
+  .brandtext .name{ font-size:20px; font-weight:700; letter-spacing:.5px; }
+  .brandtext .sub{ font-size:11px; letter-spacing:1.5px; color:var(--text-dim); text-transform:uppercase; }
+
+  .stepline{ font-size:11px; letter-spacing:2px; color:var(--teal); text-transform:uppercase; }
+  h1{ font-size:26px; margin:2px 0 4px; font-weight:700; }
+  .instructions{ font-size:13px; color:var(--text-dim); line-height:1.5; margin:0; }
+
+  /* pin dots */
+  .pindots{ display:flex; gap:10px; justify-content:center; margin:6px 0 2px; }
+  .dot{ width:15px; height:15px; border-radius:50%; border:2px solid var(--line); transition: all .2s ease; }
+  .dot.filled{ background:var(--teal); border-color:var(--teal); box-shadow:0 0 10px rgba(53,232,207,.6); }
+
+  .digitsrow{ text-align:center; font-size:15px; letter-spacing:8px; color:var(--teal); min-height:22px; }
+  .digitsrow.empty{ color:var(--text-dim); letter-spacing:2px; font-size:12px; }
+
+  /* status */
+  .status{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:10px 14px; font-size:11px; color:var(--text-dim);
+  }
+  .status .dotstate{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#565f78; }
+  .status .dotstate.live{ background:var(--teal); box-shadow:0 0 8px var(--teal); }
+  .status .dotstate.warn{ background:#ffb648; box-shadow:0 0 8px #ffb648; }
+  .status button{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+    border-radius:8px; padding:6px 10px; font-size:11px; font-family:inherit; cursor:pointer;
+  }
+  .status button:hover{ border-color:var(--teal); color:var(--teal); }
+
+  .gazehint{ text-align:center; font-size:11.5px; color:var(--text-dim); display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
+  .gazehint b{ color:var(--text); }
+
+  /* keypad */
+  .keypad{
+    display:grid; grid-template-columns: repeat(3,1fr);
+    gap:14px; margin-top:4px;
+  }
+  .key{
+    position:relative;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:16px;
+    height:96px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:pointer; user-select:none;
+    transition: border-color .15s, background .15s, transform .1s;
+    color:var(--text);
+  }
+  .key:hover{ border-color:#2a3a5c; }
+  .key.gazed{ border-color: var(--teal); background:#0d1c26; }
+  .key.ready{ border-color: var(--teal); box-shadow:0 0 22px rgba(53,232,207,.45); }
+  .key.confirmed{ background:var(--teal-dim); border-color:var(--teal); transform:scale(.96); }
+  .key .num{ font-size:30px; font-weight:700; line-height:1; }
+  .key .sub{ font-size:10px; letter-spacing:2px; color:var(--text-dim); margin-top:4px; }
+  .key.action .num{ font-size:15px; letter-spacing:1px; }
+  .key.action.clear .num{ color:var(--danger); }
+
+  .ring{ position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); pointer-events:none; }
+  .ring circle{ fill:none; }
+  .ring .track{ stroke:var(--ring-track); stroke-width:3; }
+  .ring .progress{
+    stroke: var(--teal); stroke-width:3; stroke-linecap:round;
+    stroke-dasharray: 289.0265; stroke-dashoffset: 289.0265;
+    filter: drop-shadow(0 0 4px rgba(53,232,207,.8));
+  }
+
+  .footer-note{ text-align:center; font-size:10.5px; color:#4b5670; margin-top:6px; }
+
+  /* camera preview */
+  .campreview{
+    position:fixed; top:14px; right:14px; width:96px; height:72px;
+    border-radius:10px; overflow:hidden; border:1px solid var(--line);
+    background:#000; z-index:20; opacity:.9;
+  }
+  .campreview video{ width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  .campreview .gazedotwrap{ position:absolute; inset:0; }
+  .campreview.hidden{ display:none; }
+
+  .gazecursor{
+    position:fixed; width:16px; height:16px; margin:-8px 0 0 -8px;
+    border:2px solid var(--teal); border-radius:50%;
+    pointer-events:none; z-index:30; opacity:0; transition: opacity .2s;
+    box-shadow:0 0 10px rgba(53,232,207,.7);
+  }
+  .gazecursor.on{ opacity:.9; }
+
+  .banner{
+    font-size:11.5px; padding:9px 12px; border-radius:10px;
+    background:#241a0e; border:1px solid #4a3311; color:#ffcd8a;
+    display:none;
+  }
+  .banner.show{ display:block; }
+
+  @media (prefers-reduced-motion: reduce){
+    .key, .ring .progress, .dot{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="gazecursor" id="gazeCursor"></div>
+
+<div class="campreview hidden" id="camPreview">
+  <video id="video" autoplay playsinline muted></video>
+</div>
+
+<div class="app">
+
+  <div class="brandrow">
+    <div class="orb"></div>
+    <div class="brandtext">
+      <div class="name">KYC Aura</div>
+      <div class="sub">Multimodal Auth Demo · v0.7</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="stepline">Step 2 of 4</div>
+    <h1>Set Your PIN</h1>
+    <p class="instructions">Look at a number. A ring will close around it — once it's fully lit, blink to confirm. Look at Delete or Clear to edit.</p>
+  </div>
+
+  <div class="status">
+    <div><span class="dotstate" id="statusDot"></span><span id="statusText">Checking camera…</span></div>
+    <button id="toggleModeBtn">Use mouse instead</button>
+  </div>
+
+  <div class="banner" id="calBanner">Look straight at the center of the keypad, then tap "Calibrate" below to improve accuracy.</div>
+
+  <div class="pindots" id="pindots"></div>
+  <div class="digitsrow empty" id="digitsRow">No digits entered</div>
+
+  <div class="keypad" id="keypad">
+    <!-- generated by JS -->
+  </div>
+
+  <div class="gazehint">
+    <span><b>Gaze</b> → ring fills</span>
+    <span><b>Blink</b> → confirm</span>
+    <button id="calibrateBtn" style="background:var(--panel-2);color:var(--teal);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Calibrate center</button>
+  </div>
+
+  <div class="footer-note">Mouse mode: hover a key, click when the ring is lit to confirm.</div>
+</div>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+// ---------- config ----------
+const DWELL_MS = 1000;
+const BLINK_ON = 0.5;
+const BLINK_OFF = 0.22;
+const CONFIRM_COOLDOWN_MS = 550;
+const GAZE_MAX_DIST = 150;      // px — how close projected gaze must be to a key center
+const SENS_X = 2.6;
+const SENS_Y = 3.0;
+
+// ---------- layout data ----------
+const LAYOUT = [
+  { value:'1', sub:'ABC' }, { value:'2', sub:'DEF' }, { value:'3', sub:'GHI' },
+  { value:'4', sub:'JKL' }, { value:'5', sub:'MNO' }, { value:'6', sub:'PQRS' },
+  { value:'7', sub:'TUV' }, { value:'8', sub:'WXYZ' }, { value:'9', sub:'' },
+  { value:'DEL', label:'Delete', action:true },
+  { value:'0', sub:'' },
+  { value:'CLR', label:'Clear', action:true, clear:true },
+];
+
+const keypad = document.getElementById('keypad');
+const CIRC = 2 * Math.PI * 46; // r=46
+
+LAYOUT.forEach(k => {
+  const btn = document.createElement('div');
+  btn.className = 'key' + (k.action ? ' action' : '') + (k.clear ? ' clear' : '');
+  btn.dataset.value = k.value;
+  btn.innerHTML = `
+    <svg class="ring" viewBox="0 0 100 100">
+      <circle class="track" cx="50" cy="50" r="46"></circle>
+      <circle class="progress" cx="50" cy="50" r="46" stroke-dasharray="${CIRC.toFixed(4)}" stroke-dashoffset="${CIRC.toFixed(4)}"></circle>
+    </svg>
+    <div class="num">${k.label ? k.label : k.value}</div>
+    ${k.sub ? `<div class="sub">${k.sub}</div>` : ''}
+  `;
+  keypad.appendChild(btn);
+});
+const keyEls = Array.from(keypad.querySelectorAll('.key'));
+
+// ---------- state ----------
+let digits = [];
+const pindotsEl = document.getElementById('pindots');
+const digitsRowEl = document.getElementById('digitsRow');
+const MAX_DOTS = 6;
+
+function renderDots(){
+  pindotsEl.innerHTML = '';
+  for(let i=0;i<MAX_DOTS;i++){
+    const d = document.createElement('div');
+    d.className = 'dot' + (i < digits.length ? ' filled' : '');
+    pindotsEl.appendChild(d);
+  }
+}
+function renderDigits(){
+  if(digits.length === 0){
+    digitsRowEl.textContent = 'No digits entered';
+    digitsRowEl.classList.add('empty');
+  } else {
+    digitsRowEl.textContent = digits.join('  ');
+    digitsRowEl.classList.remove('empty');
+  }
+}
+renderDots(); renderDigits();
+
+function confirmKey(el){
+  const val = el.dataset.value;
+  if(val === 'CLR'){ digits = []; }
+  else if(val === 'DEL'){ digits.pop(); }
+  else { if(digits.length < MAX_DOTS) digits.push(val); }
+  renderDots(); renderDigits();
+  el.classList.add('confirmed');
+  setTimeout(()=> el.classList.remove('confirmed'), 220);
+}
+
+// ---------- dwell engine (shared by mouse + camera modes) ----------
+let currentTarget = null;
+let dwellStart = 0;
+let cooldownUntil = 0;
+let readyEl = null;
+
+function setTarget(el){
+  if(el !== currentTarget){
+    currentTarget = el;
+    dwellStart = performance.now();
+    keyEls.forEach(k=>{ k.classList.remove('gazed','ready'); const p=k.querySelector('.progress'); p.style.strokeDashoffset = CIRC; });
+    if(el) el.classList.add('gazed');
+  }
+}
+
+function tickDwell(){
+  const now = performance.now();
+  if(!currentTarget || now < cooldownUntil){
+    return;
+  }
+  const elapsed = now - dwellStart;
+  const progress = Math.min(elapsed / DWELL_MS, 1);
+  const p = currentTarget.querySelector('.progress');
+  p.style.strokeDashoffset = (CIRC * (1 - progress)).toFixed(3);
+  if(progress >= 1){
+    currentTarget.classList.add('ready');
+    readyEl = currentTarget;
+  }
+}
+
+function tryConfirmOnBlink(){
+  const now = performance.now();
+  if(readyEl && now >= cooldownUntil){
+    confirmKey(readyEl);
+    cooldownUntil = now + CONFIRM_COOLDOWN_MS;
+    readyEl.classList.remove('ready','gazed');
+    readyEl.querySelector('.progress').style.strokeDashoffset = CIRC;
+    dwellStart = now; // require fresh dwell to re-select same key
+    readyEl = null;
+  }
+}
+
+// ---------- mouse mode ----------
+let mouseMode = false;
+keyEls.forEach(el=>{
+  el.addEventListener('mouseenter', ()=>{ if(mouseMode) setTarget(el); });
+  el.addEventListener('mouseleave', ()=>{ if(mouseMode && currentTarget===el) setTarget(null); });
+  el.addEventListener('click', ()=>{ if(mouseMode) tryConfirmOnBlink(); });
+});
+document.addEventListener('keydown', (e)=>{
+  if(mouseMode && e.code === 'Space'){ e.preventDefault(); tryConfirmOnBlink(); }
+});
+
+// ---------- camera mode ----------
+const video = document.getElementById('video');
+const camPreview = document.getElementById('camPreview');
+const gazeCursor = document.getElementById('gazeCursor');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const toggleModeBtn = document.getElementById('toggleModeBtn');
+const calBanner = document.getElementById('calBanner');
+const calibrateBtn = document.getElementById('calibrateBtn');
+
+let faceLandmarker = null;
+let cameraLive = false;
+let calOffsetX = 0, calOffsetY = 0;
+let lastRawGx = 0, lastRawGy = 0;
+let blinking = false;
+
+function setStatus(text, state){
+  statusText.textContent = text;
+  statusDot.className = 'dotstate' + (state ? ' ' + state : '');
+}
+
+function enableMouseMode(auto){
+  mouseMode = true;
+  cameraLive = false;
+  camPreview.classList.add('hidden');
+  gazeCursor.classList.remove('on');
+  calibrateBtn.style.display = 'none';
+  toggleModeBtn.textContent = 'Retry camera';
+  setTarget(null);
+  setStatus(auto ? 'Camera unavailable — mouse mode' : 'Mouse mode', auto ? 'warn' : null);
+}
+
+function enableCameraMode(){
+  mouseMode = false;
+  camPreview.classList.remove('hidden');
+  calibrateBtn.style.display = 'inline-block';
+  toggleModeBtn.textContent = 'Use mouse instead';
+}
+
+toggleModeBtn.addEventListener('click', async ()=>{
+  if(mouseMode){
+    await startCamera();
+  } else {
+    enableMouseMode(false);
+  }
+});
+
+calibrateBtn.addEventListener('click', ()=>{
+  calOffsetX = lastRawGx;
+  calOffsetY = lastRawGy;
+  calBanner.classList.remove('show');
+  setStatus('Calibrated — tracking live', 'live');
+});
+
+function eyeRatios(lm){
+  // left eye (viewer-left / subject-right): outer 33, inner 133, upper 159, lower 145, iris 468
+  // right eye (viewer-right / subject-left): outer 263, inner 362, upper 386, lower 374, iris 473
+  const L = { outer: lm[33], inner: lm[133], upper: lm[159], lower: lm[145], iris: lm[468] };
+  const R = { outer: lm[263], inner: lm[362], upper: lm[386], lower: lm[374], iris: lm[473] };
+
+  const hL = (L.iris.x - Math.min(L.inner.x, L.outer.x)) / (Math.max(L.inner.x, L.outer.x) - Math.min(L.inner.x, L.outer.x) || 1);
+  const hR = (R.iris.x - Math.min(R.inner.x, R.outer.x)) / (Math.max(R.inner.x, R.outer.x) - Math.min(R.inner.x, R.outer.x) || 1);
+  const vL = (L.iris.y - L.upper.y) / ((L.lower.y - L.upper.y) || 1);
+  const vR = (R.iris.y - R.upper.y) / ((R.lower.y - R.upper.y) || 1);
+
+  return {
+    h: (hL + hR) / 2,
+    v: (vL + vR) / 2,
+  };
+}
+
+function updateGazeCursor(px, py, visible){
+  gazeCursor.style.left = px + 'px';
+  gazeCursor.style.top = py + 'px';
+  gazeCursor.classList.toggle('on', visible);
+}
+
+function nearestKey(px, py){
+  let best = null, bestDist = Infinity;
+  keyEls.forEach(el=>{
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    const d = Math.hypot(px-cx, py-cy);
+    if(d < bestDist){ bestDist = d; best = el; }
+  });
+  return bestDist <= GAZE_MAX_DIST ? best : null;
+}
+
+let lastVideoTime = -1;
+function detectLoop(){
+  if(!cameraLive) return;
+  requestAnimationFrame(detectLoop);
+  if(video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+
+  const result = faceLandmarker.detectForVideo(video, performance.now());
+  if(!result.faceLandmarks || result.faceLandmarks.length === 0){
+    updateGazeCursor(0,0,false);
+    setTarget(null);
+    return;
+  }
+  const lm = result.faceLandmarks[0];
+  const { h, v } = eyeRatios(lm);
+  const gx = (h - 0.5) * 2;
+  const gy = (v - 0.5) * 2;
+  lastRawGx = gx; lastRawGy = gy;
+
+  const cx = window.innerWidth/2 + (gx - calOffsetX) * window.innerWidth/2 * SENS_X;
+  const cy = window.innerHeight/2 + (gy - calOffsetY) * window.innerHeight/2 * SENS_Y;
+  updateGazeCursor(cx, cy, true);
+
+  const target = nearestKey(cx, cy);
+  setTarget(target);
+
+  // blink via blendshapes
+  if(result.faceBlendshapes && result.faceBlendshapes.length){
+    const cats = result.faceBlendshapes[0].categories;
+    const l = cats.find(c=>c.categoryName === 'eyeBlinkLeft')?.score ?? 0;
+    const r = cats.find(c=>c.categoryName === 'eyeBlinkRight')?.score ?? 0;
+    const avg = (l + r) / 2;
+    if(!blinking && avg > BLINK_ON){
+      blinking = true;
+      tryConfirmOnBlink();
+    } else if(blinking && avg < BLINK_OFF){
+      blinking = false;
+    }
+  }
+}
+
+async function startCamera(){
+  setStatus('Requesting camera…', 'warn');
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width:480, height:360 }, audio:false });
+    video.srcObject = stream;
+    await video.play();
+
+    if(!faceLandmarker){
+      setStatus('Loading face model…', 'warn');
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "GPU"
+        },
+        outputFaceBlendshapes: true,
+        runningMode: "VIDEO",
+        numFaces: 1
+      });
+    }
+
+    cameraLive = true;
+    enableCameraMode();
+    setStatus('Tracking live', 'live');
+    calBanner.classList.add('show');
+    detectLoop();
+  } catch(err){
+    console.warn('Camera/gaze init failed, falling back to mouse mode:', err);
+    enableMouseMode(true);
+  }
+}
+
+// ---------- main dwell loop ----------
+function mainLoop(){
+  tickDwell();
+  requestAnimationFrame(mainLoop);
+}
+mainLoop();
+
+// ---------- boot ----------
+(async function boot(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    enableMouseMode(true);
+    return;
+  }
+  await startCamera();
+})();
+</script>
+</body>
+</html>
