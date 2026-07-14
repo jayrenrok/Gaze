@@ -179,7 +179,6 @@
 </div>
 
 <script type="module">
-import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
 function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function setStatus(text, state){ statusText.textContent = text; statusDot.className = 'dotstate' + (state ? ' ' + state : ''); }
@@ -329,11 +328,24 @@ async function startCamera(){
     video.srcObject = stream; await video.play();
     if(!faceLandmarker){
       setStatus('Loading face model…', 'warn');
-      const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-      faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions:{ modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate:"GPU" },
-        outputFaceBlendshapes:true, runningMode:"VIDEO", numFaces:1
-      });
+      const withTimeout = (p, ms, label) => Promise.race([
+        p, new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timed out')), ms))
+      ]);
+      const { FaceLandmarker, FilesetResolver } = await withTimeout(
+        import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14"),
+        15000, 'Tracking library download'
+      );
+      const vision = await withTimeout(
+        FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"),
+        15000, 'WASM runtime download'
+      );
+      faceLandmarker = await withTimeout(
+        FaceLandmarker.createFromOptions(vision, {
+          baseOptions:{ modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate:"GPU" },
+          outputFaceBlendshapes:true, runningMode:"VIDEO", numFaces:1
+        }),
+        20000, 'Face model download'
+      );
     }
     cameraLive = true; enableCameraMode();
     setStatus('Camera ready', 'live');
@@ -402,7 +414,4 @@ function onCalTap(){
 
 const testTopInfo = document.getElementById('testTopInfo');
 const quadrantPanel = document.getElementById('quadrantPanel');
-const triEls = { top:quadrantPanel.querySelector('[data-pos="top"]'), right:quadrantPanel.querySelector('[data-pos="right"]'),
-                 bottom:quadrantPanel.querySelector('[data-pos="bottom"]'), left:quadrantPanel.querySelector('[data-pos="left"]') };
-const CIRC = 2*Math.PI*69;
-Object.values(triEls).forEach(el=>{ el.querySelector('.progress').style.strokeDasharray = CIRC.toFixed(3); el.q
+const triE
