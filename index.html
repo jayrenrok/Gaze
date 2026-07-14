@@ -179,6 +179,29 @@
 </div>
 
 <script type="module">
+window.addEventListener('error', (e)=>{
+  document.title = 'ERROR — KYC Aura';
+  const el = document.getElementById('statusText');
+  if(el) el.textContent = 'Script error: ' + (e.message || e.error || 'unknown');
+  const dot = document.getElementById('statusDot');
+  if(dot) dot.className = 'dotstate warn';
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  const el = document.getElementById('statusText');
+  if(el) el.textContent = 'Promise error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+  const dot = document.getElementById('statusDot');
+  if(dot) dot.className = 'dotstate warn';
+});
+try{
+
+document.getElementById('statusText').textContent = 'Script loaded — building UI…';
+setTimeout(()=>{
+  if(document.getElementById('statusText').textContent.includes('building UI')){
+    document.getElementById('statusText').textContent = 'Stuck after load — hard-refresh the page (this may be a cached old version)';
+    document.getElementById('statusDot').className = 'dotstate warn';
+  }
+}, 4000);
+
 
 function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function setStatus(text, state){ statusText.textContent = text; statusDot.className = 'dotstate' + (state ? ' ' + state : ''); }
@@ -515,6 +538,13 @@ function showResult(){
     const match = entered[i] === d;
     const b = document.createElement('div'); b.className='rdigit '+(match?'ok':'bad'); b.textContent = entered[i]; rowEntered.appendChild(b);
   });
+}
+}catch(fatalErr){
+  console.error('Fatal init error:', fatalErr);
+  const el = document.getElementById('statusText');
+  if(el) el.textContent = 'Init failed: ' + (fatalErr && fatalErr.message ? fatalErr.message : fatalErr);
+  const dot = document.getElementById('statusDot');
+  if(dot) dot.className = 'dotstate warn';
 }
 </script>
 </body>
